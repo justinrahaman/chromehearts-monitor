@@ -1,4 +1,3 @@
-import json
 import os
 import time
 import requests
@@ -21,37 +20,36 @@ def fetch_available_slots():
     resp.raise_for_status()
     html = resp.text
 
-    marker = '__NEXT_DATA__" type="application/json">'
-    start = html.find(marker)
-    if start == -1:
-        raise ValueError("__NEXT_DATA__ marker not found in page")
-    start += len(marker)
+    # Waitwhile migrated to Next.js App Router -- slot data is embedded as
+    # escaped JSON in self.__next_f.push() payloads, not a __NEXT_DATA__ tag.
+    key = "availableBookingResourceIds"
+    idx = html.find(key)
+    if idx == -1:
+        raise ValueError("availableBookingResourceIds not found in page")
 
-    end = html.find("</script>", start)
-    if end == -1:
-        raise ValueError("Closing </script> not found after __NEXT_DATA__")
+    start = html.index("[", idx)
+    end = html.index("]", start)
+    raw = html[start + 1 : end].strip()
+    if not raw:
+        return []
 
-    data = json.loads(html[start:end])
-    slot_ids = (
-        data.get("props", {})
-            .get("ssrLocationData", {})
-            .get("availableBookingResourceIds", [])
-    )
-    return slot_ids
+    # IDs may be escaped strings like \"abc\" or bare numbers
+    slot_ids = [x.strip().strip('\\"').strip('"') for x in raw.split(",")]
+    return [s for s in slot_ids if s]
 
 
 def send_slack_alert(slot_ids):
     if not SLACK_WEBHOOK:
-        print("[WARN] SLACK_WEBHOOK not set — skipping notification")
+        print("[WARN] SLACK_WEBHOOK not set -- skipping notification")
         return
 
     booking_url = "https://waitwhile.com/locations/chromehearts/time?registration=booking"
     ids_text = ", ".join(str(s) for s in slot_ids)
     payload = {
         "text": (
-            f"🚨 *Chrome Hearts slot open!*\n"
-            + f"<{booking_url}|Book now>\n"
-            + f"Slot IDs: `{ids_text}`"
+            f"\U0001F6A8 *Chrome Hearts slot open!*\n"
+            f"<{booking_url}|Book now>\n"
+            f"Slot IDs: `{ids_text}`"
         )
     }
     r = requests.post(SLACK_WEBHOOK, json=payload, timeout=10)
@@ -61,7 +59,7 @@ def send_slack_alert(slot_ids):
 
 def main():
     had_slots = False
-    print("[INFO] Chrome Hearts monitor started. Polling every 10s\u2026")
+    print("[INFO] Chrome Hearts monitor started. Polling every 10s...")
 
     while True:
         try:
@@ -72,7 +70,7 @@ def main():
                 print(f"[ALERT] Slots opened: {slot_ids}")
                 send_slack_alert(slot_ids)
             elif not has_slots and had_slots:
-                print("[INFO] Slots are gone again — watching for next opening")
+                print("[INFO] Slots are gone again -- watching for next opening")
             else:
                 status = f"slots available: {slot_ids}" if has_slots else "no slots"
                 print(f"[poll] {status}")
