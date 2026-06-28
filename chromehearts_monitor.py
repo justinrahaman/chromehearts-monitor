@@ -49,7 +49,7 @@ def send_slack_alert(slot_ids):
     ids_text = ", ".join(str(s) for s in slot_ids)
     payload = {
         "text": (
-            f"\u{1F6A8} *Chrome Hearts slot open!*\n"
+            f"🚨 *Chrome Hearts slot open!*\n"
             + f"<{booking_url}|Book now>\n"
             + f"Slot IDs: `{ids_text}`"
         )
